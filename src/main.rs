@@ -1,7 +1,7 @@
 use crate::game::grid::Grid;
 use crate::game::tile::{Tile, TileContent, TogglableTile};
 use cursive::direction::Direction;
-use cursive::event::EventResult;
+use cursive::event::{Event, EventResult};
 use cursive::theme::{BaseColor, Color, ColorStyle};
 use cursive::view::CannotFocus;
 use cursive::views::{Button, Dialog, LinearLayout, Panel};
@@ -9,47 +9,36 @@ use cursive::{Cursive, Printer, Vec2};
 
 mod game;
 
+const WHITE: Color = Color::Light(BaseColor::White);
+const BLACK: Color = Color::Dark(BaseColor::Black);
+const RED: Color = Color::Dark(BaseColor::Red);
+const YELLOW: Color = Color::Light(BaseColor::Yellow);
+
+fn color_style(tile: &Tile) -> ColorStyle {
+    let (font_color, bg_color) = match tile {
+        Tile::Togglable(TogglableTile { times_lit, content }) => {
+            let font_color = match content {
+                TileContent::Nothing => WHITE,
+                TileContent::Bulb => BLACK,
+                TileContent::Cross => RED,
+            };
+            let bg_color = if *times_lit > 0 { YELLOW } else { WHITE };
+
+            (font_color, bg_color)
+        }
+        Tile::Wall | Tile::Number(_) => (WHITE, BLACK),
+    };
+
+    ColorStyle::new(font_color, bg_color)
+}
+
 impl cursive::view::View for Grid {
     fn draw(&self, printer: &Printer) {
         for (x, row) in self.grid.iter().enumerate() {
             for (y, tile) in row.iter().enumerate() {
-                let (color, text) = match tile {
-                    Tile::Togglable(TogglableTile {
-                        content: TileContent::Bulb,
-                        ..
-                    }) => (Color::Dark(BaseColor::Black), "B"),
-                    Tile::Togglable(TogglableTile {
-                        content: TileContent::Nothing,
-                        ..
-                    }) => (Color::Dark(BaseColor::White), " "),
-                    Tile::Togglable(TogglableTile {
-                        content: TileContent::Cross,
-                        ..
-                    }) => (Color::Dark(BaseColor::Red), "X"),
-                    Tile::Wall => (Color::Dark(BaseColor::Black), " "),
-                    Tile::Zero => (Color::Dark(BaseColor::White), "0"),
-                    Tile::One => (Color::Dark(BaseColor::White), "1"),
-                    Tile::Two => (Color::Dark(BaseColor::White), "2"),
-                    Tile::Three => (Color::Dark(BaseColor::White), "3"),
-                    Tile::Four => (Color::Dark(BaseColor::White), "4"),
-                };
+                let color_style = color_style(tile);
 
-                let bg_color = match tile {
-                    Tile::Togglable(TogglableTile { times_lit, .. }) => {
-                        if *times_lit > 0 {
-                            Color::Light(BaseColor::Yellow)
-                        } else {
-                            Color::Light(BaseColor::White)
-                        }
-                    }
-                    Tile::Wall | Tile::Zero | Tile::One | Tile::Two | Tile::Three | Tile::Four => {
-                        Color::Dark(BaseColor::Black)
-                    }
-                };
-
-                printer.with_color(ColorStyle::new(color, bg_color), |printer| {
-                    printer.print((x, y), text)
-                });
+                printer.with_color(color_style, |printer| printer.print((x, y), &tile.symbol()));
             }
         }
     }
@@ -58,6 +47,10 @@ impl cursive::view::View for Grid {
         let y = self.grid[0].len();
 
         (x, y).into()
+    }
+
+    fn on_event(&mut self, _: Event) -> EventResult {
+        EventResult::Ignored
     }
 
     fn take_focus(&mut self, _source: Direction) -> Result<EventResult, CannotFocus> {
@@ -69,8 +62,8 @@ fn show_board(siv: &mut Cursive) {
     siv.add_layer(
         Dialog::new()
             .title("Akari")
-            .content(LinearLayout::horizontal().child(Panel::new(Grid::new_hardcoded())))
-            .padding_lrtb(4, 5, 1, 1)
+            .content(LinearLayout::vertical().child(Panel::new(Grid::new_hardcoded())))
+            // .padding_lrtb(4, 5, 1, 1) // TODO
             .button("Quit game", |s| {
                 s.pop_layer();
             }),
@@ -88,6 +81,5 @@ fn main() {
         ),
     );
     siv.add_global_callback('q', Cursive::quit);
-
     siv.run();
 }

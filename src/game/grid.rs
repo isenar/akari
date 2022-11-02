@@ -28,7 +28,7 @@ impl Grid {
                         times_lit: 1,
                         content: TileContent::Bulb,
                     }), // bulb
-                    Tile::Three,
+                    Tile::Number(3),
                     Tile::blank(), // bulb
                     Tile::blank(),
                 ],
@@ -36,12 +36,12 @@ impl Grid {
                     Tile::blank(),
                     Tile::blank(),
                     Tile::blank(), // bulb
-                    Tile::Four,
+                    Tile::Number(4),
                     Tile::blank(), // bulb
                 ],
                 vec![
                     Tile::Wall,
-                    Tile::One,
+                    Tile::Number(1),
                     Tile::blank(),
                     Tile::blank(), // bulb
                     Tile::blank(),

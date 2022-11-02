@@ -1,12 +1,10 @@
+use std::borrow::Cow;
+
 #[derive(Debug)]
 pub enum Tile {
     Togglable(TogglableTile),
     Wall,
-    Zero,
-    One,
-    Two,
-    Three,
-    Four,
+    Number(u8),
 }
 
 impl Tile {
@@ -21,6 +19,18 @@ impl Tile {
             togglable.toggle()
         } else {
             ActionResult::Nothing
+        }
+    }
+
+    pub fn symbol(&self) -> Cow<str> {
+        match self {
+            Tile::Togglable(TogglableTile { content, .. }) => match content {
+                TileContent::Nothing => Cow::Borrowed(" "),
+                TileContent::Bulb => Cow::Borrowed("B"),
+                TileContent::Cross => Cow::Borrowed("X"),
+            },
+            Tile::Wall => Cow::Borrowed(" "),
+            Tile::Number(n) => Cow::Owned(n.to_string()),
         }
     }
 }
