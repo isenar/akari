@@ -1,11 +1,12 @@
 use crate::game::grid::Grid;
 use crate::game::tile::{Tile, TileContent, TogglableTile};
 use cursive::direction::Direction;
-use cursive::event::{Event, EventResult};
+use cursive::event::{Event, EventResult, MouseButton, MouseEvent};
 use cursive::theme::{BaseColor, Color, ColorStyle};
 use cursive::view::CannotFocus;
 use cursive::views::{Button, Dialog, LinearLayout, Panel};
 use cursive::{Cursive, Printer, Vec2};
+use std::borrow::Cow;
 
 mod game;
 
@@ -13,6 +14,18 @@ const WHITE: Color = Color::Light(BaseColor::White);
 const BLACK: Color = Color::Dark(BaseColor::Black);
 const RED: Color = Color::Dark(BaseColor::Red);
 const YELLOW: Color = Color::Light(BaseColor::Yellow);
+
+fn tile_symbol(tile: &Tile) -> Cow<str> {
+    match tile {
+        Tile::Togglable(TogglableTile { content, .. }) => match content {
+            TileContent::Nothing => Cow::Borrowed(" "),
+            TileContent::Bulb => Cow::Borrowed("B"),
+            TileContent::Cross => Cow::Borrowed("X"),
+        },
+        Tile::Wall => Cow::Borrowed(" "),
+        Tile::Number(n) => Cow::Owned(n.to_string()),
+    }
+}
 
 fn color_style(tile: &Tile) -> ColorStyle {
     let (font_color, bg_color) = match tile {
@@ -37,8 +50,9 @@ impl cursive::view::View for Grid {
         for (x, row) in self.grid.iter().enumerate() {
             for (y, tile) in row.iter().enumerate() {
                 let color_style = color_style(tile);
+                let tile_symbol = tile_symbol(tile);
 
-                printer.with_color(color_style, |printer| printer.print((x, y), &tile.symbol()));
+                printer.with_color(color_style, |printer| printer.print((x, y), &tile_symbol));
             }
         }
     }
@@ -49,7 +63,20 @@ impl cursive::view::View for Grid {
         (x, y).into()
     }
 
-    fn on_event(&mut self, _: Event) -> EventResult {
+    fn on_event(&mut self, event: Event) -> EventResult {
+        if let Event::Mouse {
+            event: MouseEvent::Release(button),
+            ..
+        } = event
+        {
+            match button {
+                MouseButton::Left => self.toggle(0, 0),
+                MouseButton::Middle => self.toggle(3, 2),
+                MouseButton::Right => self.toggle(0, 4),
+                _ => {}
+            }
+        }
+
         EventResult::Ignored
     }
 

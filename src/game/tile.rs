@@ -1,6 +1,4 @@
-use std::borrow::Cow;
-
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tile {
     Togglable(TogglableTile),
     Wall,
@@ -9,7 +7,21 @@ pub enum Tile {
 
 impl Tile {
     pub const fn blank() -> Self {
-        Self::Togglable(TogglableTile::empty())
+        Self::lit_empty(0)
+    }
+
+    pub const fn lit_empty(level: u8) -> Self {
+        Self::Togglable(TogglableTile {
+            times_lit: level,
+            content: TileContent::Nothing,
+        })
+    }
+
+    pub const fn bulb(level: u8) -> Self {
+        Self::Togglable(TogglableTile {
+            times_lit: level,
+            content: TileContent::Bulb,
+        })
     }
 }
 
@@ -22,20 +34,20 @@ impl Tile {
         }
     }
 
-    pub fn symbol(&self) -> Cow<str> {
-        match self {
-            Tile::Togglable(TogglableTile { content, .. }) => match content {
-                TileContent::Nothing => Cow::Borrowed(" "),
-                TileContent::Bulb => Cow::Borrowed("B"),
-                TileContent::Cross => Cow::Borrowed("X"),
-            },
-            Tile::Wall => Cow::Borrowed(" "),
-            Tile::Number(n) => Cow::Owned(n.to_string()),
+    pub fn light_up(&mut self) {
+        if let Self::Togglable(togglable) = self {
+            togglable.times_lit += 1;
+        }
+    }
+
+    pub fn light_down(&mut self) {
+        if let Self::Togglable(togglable) = self {
+            togglable.times_lit -= 1;
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TogglableTile {
     pub times_lit: u8,
     pub content: TileContent,
@@ -69,7 +81,7 @@ pub enum ActionResult {
     Nothing,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TileContent {
     Nothing,
     Bulb,
