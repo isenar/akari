@@ -12,60 +12,73 @@ impl Tile {
 
     pub const fn lit_empty(level: u8) -> Self {
         Self::Togglable(TogglableTile {
-            times_lit: level,
+            light_level: level,
             content: TileContent::Nothing,
         })
     }
 
     pub const fn bulb(level: u8) -> Self {
         Self::Togglable(TogglableTile {
-            times_lit: level,
+            light_level: level,
             content: TileContent::Bulb,
         })
     }
 }
 
 impl Tile {
-    pub fn toggle(&mut self) -> ActionResult {
+    pub fn toggle(&mut self) -> BulbActionResult {
         if let Self::Togglable(togglable) = self {
             togglable.toggle()
         } else {
-            ActionResult::Nothing
+            BulbActionResult::Nothing
         }
     }
 
-    pub fn light_up(&mut self) {
+    pub fn toggle_back(&mut self) -> BulbActionResult {
         if let Self::Togglable(togglable) = self {
-            togglable.times_lit += 1;
+            togglable.toggle_back()
+        } else {
+            BulbActionResult::Nothing
         }
     }
 
-    pub fn light_down(&mut self) {
+    pub fn increase_light_level(&mut self) {
         if let Self::Togglable(togglable) = self {
-            togglable.times_lit -= 1;
+            togglable.light_level += 1;
+        }
+    }
+
+    pub fn decrease_light_level(&mut self) {
+        if let Self::Togglable(togglable) = self {
+            togglable.light_level -= 1;
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TogglableTile {
-    pub times_lit: u8,
+    pub light_level: u8,
     pub content: TileContent,
 }
 
 impl TogglableTile {
-    const fn empty() -> Self {
-        Self {
-            times_lit: 0,
-            content: TileContent::Nothing,
-        }
+    fn toggle(&mut self) -> BulbActionResult {
+        let (next, action) = match self.content {
+            TileContent::Nothing => (TileContent::Bulb, BulbActionResult::BulbInserted),
+            TileContent::Bulb => (TileContent::Cross, BulbActionResult::BulbRemoved),
+            TileContent::Cross => (TileContent::Nothing, BulbActionResult::Nothing),
+        };
+
+        self.content = next;
+
+        action
     }
 
-    fn toggle(&mut self) -> ActionResult {
+    fn toggle_back(&mut self) -> BulbActionResult {
         let (next, action) = match self.content {
-            TileContent::Nothing => (TileContent::Bulb, ActionResult::BulbInserted),
-            TileContent::Bulb => (TileContent::Cross, ActionResult::CrossInserted),
-            TileContent::Cross => (TileContent::Nothing, ActionResult::TileCleared),
+            TileContent::Nothing => (TileContent::Cross, BulbActionResult::Nothing),
+            TileContent::Bulb => (TileContent::Nothing, BulbActionResult::BulbRemoved),
+            TileContent::Cross => (TileContent::Bulb, BulbActionResult::BulbInserted),
         };
 
         self.content = next;
@@ -74,10 +87,9 @@ impl TogglableTile {
     }
 }
 #[derive(Debug)]
-pub enum ActionResult {
+pub enum BulbActionResult {
     BulbInserted,
-    CrossInserted,
-    TileCleared,
+    BulbRemoved,
     Nothing,
 }
 
