@@ -9,13 +9,6 @@ pub struct Grid {
 }
 
 impl Grid {
-    pub fn new_empty_3x3() -> Self {
-        Self {
-            grid: vec![vec![Tile::blank(); 3]; 3],
-            _solution_bulbs: Default::default(),
-        }
-    }
-
     // hardoded 5x5 from BrainBashers daily (17/10/22 - easy)
     pub fn new_hardcoded() -> Self {
         let _solution_bulbs = hashset! {
@@ -69,16 +62,12 @@ impl Grid {
     }
 
     pub fn toggle(&mut self, row: usize, col: usize) {
-        println!("COLS: {:?}", self.grid.first().map(|c| c.len()));
-        println!("ROWS: {:?}", self.grid.len());
-
         let action = self.grid[row][col].toggle();
         if let ActionResult::Nothing = action {
             return;
         }
 
-        let Tile::Togglable(after)  = &mut self.grid[row][col]
-         else {
+        let Tile::Togglable(after)  = &mut self.grid[row][col] else {
             unreachable!("Inconsistent before -> after state")
         };
 
@@ -87,15 +76,8 @@ impl Grid {
             ActionResult::BulbInserted => {
                 after.times_lit += 1;
 
-                let horizontal = self.horizontal_neighbours(row, col);
-                println!("Horizontal: {horizontal:?}");
-
-                let vertical = self.vertical_neighbours(row, col);
-                println!("Vertical: {vertical:?}");
-
                 for (r, c) in self.affected_neighbours(row, col) {
                     self.grid[r][c].light_up();
-
                 }
 
             }
@@ -114,60 +96,64 @@ impl Grid {
         }
     }
 
-    fn affected_neighbours(&self, row: usize, col: usize) -> impl Iterator<Item = (usize, usize)> {
+    fn affected_neighbours(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
         self.horizontal_neighbours(row, col)
             .into_iter()
             .chain(self.vertical_neighbours(row, col))
+            .collect()
     }
 
-    // TODO: rewrite this crap
-    fn horizontal_neighbours(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
-        dbg!(row, col);
+    fn horizontal_neighbours(
+        &self,
+        row: usize,
+        col: usize,
+    ) -> impl IntoIterator<Item = (usize, usize)> + '_ {
         debug_assert!(row < self.grid.len());
         debug_assert!(Some(col) < self.grid.first().map(|col| col.len()));
 
-        let mut neighbours = Vec::new();
+        let columns = self.grid[row].len();
 
-        for i in (col + 1)..self.grid[row].len() {
-            let tile = &self.grid[row][i];
+        let to_left = self.grid[row]
+            .iter()
+            .enumerate()
+            .rev()
+            .skip(columns - col)
+            .take_while(|(_, tile)| matches!(tile, Tile::Togglable(_)))
+            .map(move |(i, _)| (row, i));
 
-            match tile {
-                Tile::Togglable(_) => neighbours.push((row, i)),
-                _ => break,
-            }
-        }
+        let to_right = self.grid[row]
+            .iter()
+            .enumerate()
+            .skip(col + 1)
+            .take_while(|(_, tile)| matches!(tile, Tile::Togglable(_)))
+            .map(move |(i, _)| (row, i));
 
-        for i in (0..col).rev() {
-            let tile = &self.grid[row][i];
-            match tile {
-                Tile::Togglable(_) => neighbours.push((row, i)),
-                _ => break,
-            }
-        }
-
-        neighbours
+        to_left.chain(to_right)
     }
 
-    fn vertical_neighbours(&self, row: usize, col: usize) -> Vec<(usize, usize)> {
-        let mut neighbours = Vec::new();
+    fn vertical_neighbours(
+        &self,
+        row: usize,
+        col: usize,
+    ) -> impl IntoIterator<Item = (usize, usize)> + '_ {
+        let above = self
+            .grid
+            .iter()
+            .enumerate()
+            .rev()
+            .skip(self.grid.len() - row)
+            .take_while(move |(_, tile)| matches!(tile[col], Tile::Togglable(_)))
+            .map(move |(i, _)| (i, col));
 
-        for i in (row + 1)..self.grid.len() {
-            let tile = &self.grid[i][col];
-            match tile {
-                Tile::Togglable(_) => neighbours.push((i, col)),
-                Tile::Wall | Tile::Number(_) => break,
-            }
-        }
+        let below = self
+            .grid
+            .iter()
+            .enumerate()
+            .skip(row + 1)
+            .take_while(move |(_, tile)| matches!(tile[col], Tile::Togglable(_)))
+            .map(move |(i, _)| (i, col));
 
-        for i in (0..row).rev() {
-            let tile = &self.grid[i][col];
-            match tile {
-                Tile::Togglable(_) => neighbours.push((i, col)),
-                Tile::Wall | Tile::Number(_) => break,
-            }
-        }
-
-        neighbours
+        above.chain(below)
     }
 }
 
@@ -175,15 +161,15 @@ impl Grid {
 mod tests {
     use super::*;
 
-    fn assert_each_tile(expected: &Grid, actual: &Grid) {
+    fn assert_grid(expected: &Grid, actual: &Grid) {
         let expected = &expected.grid;
         let actual = &actual.grid;
 
-        assert_eq!(expected.len(), actual.len());
-        assert_eq!(expected[0].len(), actual[0].len());
+        assert_eq!(expected.len(), actual.len(), "Rows mismatch");
+        assert_eq!(expected[0].len(), actual[0].len(), "Columns mismatch");
 
         for row in 0..expected.len() {
-            for col in 0..expected.len() {
+            for col in 0..expected[0].len() {
                 assert_eq!(
                     expected[row][col], actual[row][col],
                     "Tile mismatch at [{row}][{col}]"
@@ -210,14 +196,7 @@ mod tests {
 
         grid.toggle(1, 1);
 
-        for x in 0..grid.grid.len() {
-            for y in 0..grid.grid[0].len() {
-                assert_eq!(
-                    expected.grid[x][y], grid.grid[x][y],
-                    "Tile mismatch at [{x}][{y}]"
-                );
-            }
-        }
+        assert_grid(&expected, &grid);
     }
 
     #[test]
@@ -238,14 +217,7 @@ mod tests {
         grid.toggle(0, 0);
         grid.toggle(2, 2);
 
-        for x in 0..grid.grid.len() {
-            for y in 0..grid.grid[0].len() {
-                assert_eq!(
-                    expected.grid[x][y], grid.grid[x][y],
-                    "Tile mismatch at [{x}][{y}]"
-                );
-            }
-        }
+        assert_grid(&expected, &grid);
     }
 
     #[test]
@@ -269,13 +241,6 @@ mod tests {
         grid.toggle(3, 0);
         grid.toggle(3, 2);
 
-        for x in 0..grid.grid.len() {
-            for y in 0..grid.grid[0].len() {
-                assert_eq!(
-                    expected.grid[x][y], grid.grid[x][y],
-                    "Tile mismatch at [{x}][{y}]"
-                );
-            }
-        }
+        assert_grid(&expected, &grid);
     }
 }
