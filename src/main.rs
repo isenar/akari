@@ -1,11 +1,13 @@
-use crate::game::grid::Grid;
-use crate::game::tile::{Tile, TileContent, TogglableTile};
 use cursive::direction::Direction;
 use cursive::event::{Event, EventResult, MouseButton, MouseEvent};
 use cursive::theme::{BaseColor, Color, ColorStyle};
 use cursive::view::CannotFocus;
 use cursive::views::{Button, Dialog, LinearLayout, Panel};
 use cursive::{Cursive, Printer, Vec2};
+use log::info;
+
+use crate::game::grid::Grid;
+use crate::game::tile::{Tile, TileContent, TogglableTile, Wall};
 
 mod game;
 
@@ -21,15 +23,12 @@ fn tile_symbol(tile: &Tile) -> &str {
             TileContent::Bulb => "💡",
             TileContent::Cross => "❌",
         },
-        Tile::Wall => "  ",
-        Tile::Number(n) => match n {
-            0 => " 0️",
-            1 => " 1",
-            2 => " 2",
-            3 => " 3",
-            4 => " 4",
-            _ => unreachable!("Can't have more than 4 adjacent bulbs"),
-        },
+        Tile::Wall(Wall::Clear) => "  ",
+        Tile::Wall(Wall::Zero) => " 0",
+        Tile::Wall(Wall::One) => " 1",
+        Tile::Wall(Wall::Two) => " 2",
+        Tile::Wall(Wall::Three) => " 3",
+        Tile::Wall(Wall::Four) => " 4",
     }
 }
 
@@ -48,7 +47,7 @@ fn color_style(tile: &Tile) -> ColorStyle {
 
             (font_color, bg_color)
         }
-        Tile::Wall | Tile::Number(_) => (WHITE, BLACK),
+        Tile::Wall(_) => (WHITE, BLACK),
     };
 
     ColorStyle::new(font_color, bg_color)
@@ -72,7 +71,7 @@ impl Game {
             .checked_sub(offset)
             .map(|pos| pos.map_x(|x| x / 2))
             .and_then(|pos| {
-                if pos.fits_in(self.grid.size.map_x(|x| x - 1).map_y(|y| y - 1)) {
+                if pos.fits_in(self.grid.size().map_x(|x| x - 1).map_y(|y| y - 1)) {
                     Some(pos)
                 } else {
                     None
@@ -95,7 +94,7 @@ impl cursive::view::View for Game {
         }
     }
     fn required_size(&mut self, _: Vec2) -> Vec2 {
-        self.grid.size.map_x(|x| x * 2)
+        self.grid.size().map_x(|x| x * 2)
     }
 
     fn on_event(&mut self, event: Event) -> EventResult {
@@ -147,7 +146,7 @@ fn show_board(siv: &mut Cursive) {
         Dialog::new()
             .title("Akari")
             .content(LinearLayout::vertical().child(Panel::new(Game::new())))
-            .padding_lrtb(4, 5, 1, 1) // TODO
+            .padding_lrtb(4, 5, 1, 1)
             .button("Quit game", |s| {
                 s.pop_layer();
             }),
@@ -155,10 +154,14 @@ fn show_board(siv: &mut Cursive) {
 }
 
 fn how_to_play(siv: &mut Cursive) {
-    siv.add_layer(Dialog::info("Lorem ipsum how to play this game?"));
+    siv.add_layer(Dialog::info("Todo"));
 }
 
 fn main() {
+    cursive::logger::init();
+
+    info!("Starting game");
+
     let mut siv = cursive::default();
 
     siv.add_layer(
@@ -170,5 +173,6 @@ fn main() {
         ),
     );
     siv.add_global_callback('q', Cursive::quit);
+    siv.add_global_callback('`', Cursive::toggle_debug_console);
     siv.run();
 }

@@ -1,13 +1,16 @@
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Tile {
     Togglable(TogglableTile),
-    Wall,
-    Number(u8),
+    Wall(Wall),
 }
 
 impl Tile {
     pub const fn blank() -> Self {
         Self::lit_empty(0)
+    }
+
+    pub const fn wall() -> Self {
+        Self::Wall(Wall::Clear)
     }
 
     pub const fn lit_empty(level: u8) -> Self {
@@ -26,19 +29,19 @@ impl Tile {
 }
 
 impl Tile {
-    pub fn toggle(&mut self) -> BulbActionResult {
+    pub fn toggle(&mut self) -> BulbAction {
         if let Self::Togglable(togglable) = self {
             togglable.toggle()
         } else {
-            BulbActionResult::Nothing
+            BulbAction::Nothing
         }
     }
 
-    pub fn toggle_back(&mut self) -> BulbActionResult {
+    pub fn toggle_back(&mut self) -> BulbAction {
         if let Self::Togglable(togglable) = self {
             togglable.toggle_back()
         } else {
-            BulbActionResult::Nothing
+            BulbAction::Nothing
         }
     }
 
@@ -61,35 +64,46 @@ pub struct TogglableTile {
     pub content: TileContent,
 }
 
+#[allow(unused)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Wall {
+    Clear,
+    Zero,
+    One,
+    Two,
+    Three,
+    Four,
+}
+
 impl TogglableTile {
-    fn toggle(&mut self) -> BulbActionResult {
-        let (next, action) = match self.content {
-            TileContent::Nothing => (TileContent::Bulb, BulbActionResult::BulbInserted),
-            TileContent::Bulb => (TileContent::Cross, BulbActionResult::BulbRemoved),
-            TileContent::Cross => (TileContent::Nothing, BulbActionResult::Nothing),
+    fn toggle(&mut self) -> BulbAction {
+        let (new, action) = match self.content {
+            TileContent::Nothing => (TileContent::Bulb, BulbAction::Inserted),
+            TileContent::Bulb => (TileContent::Cross, BulbAction::Removed),
+            TileContent::Cross => (TileContent::Nothing, BulbAction::Nothing),
         };
 
-        self.content = next;
+        self.content = new;
 
         action
     }
 
-    fn toggle_back(&mut self) -> BulbActionResult {
-        let (next, action) = match self.content {
-            TileContent::Nothing => (TileContent::Cross, BulbActionResult::Nothing),
-            TileContent::Bulb => (TileContent::Nothing, BulbActionResult::BulbRemoved),
-            TileContent::Cross => (TileContent::Bulb, BulbActionResult::BulbInserted),
+    fn toggle_back(&mut self) -> BulbAction {
+        let (new, action) = match self.content {
+            TileContent::Nothing => (TileContent::Cross, BulbAction::Nothing),
+            TileContent::Bulb => (TileContent::Nothing, BulbAction::Removed),
+            TileContent::Cross => (TileContent::Bulb, BulbAction::Inserted),
         };
 
-        self.content = next;
+        self.content = new;
 
         action
     }
 }
 #[derive(Debug)]
-pub enum BulbActionResult {
-    BulbInserted,
-    BulbRemoved,
+pub enum BulbAction {
+    Inserted,
+    Removed,
     Nothing,
 }
 

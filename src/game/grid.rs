@@ -1,29 +1,22 @@
-use crate::game::tile::{BulbActionResult, Tile};
+use crate::game::tile::{BulbAction, Tile, Wall};
 use crate::Vec2;
+use log::debug;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Grid {
-    pub size: Vec2,
     pub grid: Vec<Vec<Tile>>,
+    pub solution: Vec<(usize, usize)>,
 }
 
 impl Grid {
-    // hardoded 5x5 from BrainBashers daily (17/10/22 - easy)
+    // hardcoded 5x5 from BrainBashers daily (17/10/22 - easy) for testing
     pub fn new_hardcoded() -> Self {
-        // Solution:
-        //     (0, 1), (0, 3),
-        //     (1, 2), (1, 4),
-        //     (2, 3),
-        //     (3, 1),
-        //     (4, 0),
-
         Self {
-            size: Vec2::new(5, 5),
             grid: vec![
                 vec![
                     Tile::blank(),
                     Tile::blank(),
-                    Tile::Number(3),
+                    Tile::Wall(Wall::Three),
                     Tile::blank(), // bulb
                     Tile::blank(),
                 ],
@@ -31,12 +24,12 @@ impl Grid {
                     Tile::blank(),
                     Tile::blank(),
                     Tile::blank(), // bulb
-                    Tile::Number(4),
+                    Tile::Wall(Wall::Four),
                     Tile::blank(), // bulb
                 ],
                 vec![
-                    Tile::Wall,
-                    Tile::Number(1),
+                    Tile::Wall(Wall::Clear),
+                    Tile::Wall(Wall::One),
                     Tile::blank(),
                     Tile::blank(), // bulb
                     Tile::blank(),
@@ -52,14 +45,22 @@ impl Grid {
                     Tile::blank(), // bulb
                     Tile::blank(),
                     Tile::blank(),
-                    Tile::Wall,
+                    Tile::wall(),
                     Tile::blank(),
                 ],
             ],
+            // solution: vec![(0, 1), (0, 3), (1, 2), (1, 4), (2, 3), (3, 1), (4, 0)],
+            solution: vec![(0, 4), (1, 0), (1, 3), (2, 1), (3, 0), (3, 2), (4, 1)],
         }
     }
 
+    pub fn size(&self) -> Vec2 {
+        Vec2::new(self.grid[0].len(), self.grid.len())
+    }
+
     pub fn toggle(&mut self, row: usize, col: usize) {
+        debug!("Attempting to toggle [{row}][{col}]");
+
         let action = self.grid[row][col].toggle();
         self.handle_toggle(row, col, action);
     }
@@ -70,27 +71,32 @@ impl Grid {
         self.handle_toggle(row, col, action);
     }
 
-    fn handle_toggle(&mut self, row: usize, col: usize, action: BulbActionResult) {
-        if let BulbActionResult::Nothing = action {
+    fn handle_toggle(&mut self, row: usize, col: usize, action: BulbAction) {
+        if let BulbAction::Nothing = action {
+            debug!("Got 'nothing', skipped handling a toggle");
             return;
         }
+        let affected = self.affected_neighbours(row, col);
+        debug!("Affected neighbours of [{row}][{col}]: {affected:?}");
 
         let Tile::Togglable(after)  = &mut self.grid[row][col] else {
             unreachable!("Inconsistent before -> after state")
         };
 
+        debug!("Action: {action:?}");
+
         match action {
-            BulbActionResult::BulbInserted => {
+            BulbAction::Inserted => {
                 after.light_level += 1;
 
-                for (r, c) in self.affected_neighbours(row, col) {
+                for (r, c) in affected {
                     self.grid[r][c].increase_light_level();
                 }
             }
-            BulbActionResult::BulbRemoved => {
+            BulbAction::Removed => {
                 after.light_level -= 1;
 
-                for (r, c) in self.affected_neighbours(row, col) {
+                for (r, c) in affected {
                     self.grid[r][c].decrease_light_level();
                 }
             }
@@ -114,13 +120,19 @@ impl Grid {
         col: usize,
     ) -> impl IntoIterator<Item = (usize, usize)> + '_ {
         let columns = self.grid[row].len();
-        let to_left = self.grid[row].iter().enumerate().rev().skip(columns - col);
-        let to_right = self.grid[row].iter().enumerate().skip(col + 1);
+        let on_left = self.grid[row]
+            .iter()
+            .enumerate()
+            .rev()
+            .skip(columns - col)
+            .map_while(move |(col, tile)| togglable_pos2(row, col, tile));
+        let on_right = self.grid[row]
+            .iter()
+            .enumerate()
+            .skip(col + 1)
+            .map_while(move |(col, tile)| togglable_pos2(row, col, tile));
 
-        to_left
-            .chain(to_right)
-            .take_while(|(_, tile)| matches!(tile, Tile::Togglable(_)))
-            .map(move |(i, _)| (row, i))
+        on_left.chain(on_right)
     }
 
     fn vertical_neighbours(
@@ -128,30 +140,44 @@ impl Grid {
         row: usize,
         col: usize,
     ) -> impl IntoIterator<Item = (usize, usize)> + '_ {
+        let rows = self.grid.len();
         let above = self
             .grid
             .iter()
             .enumerate()
             .rev()
-            .skip(self.grid.len() - row)
-            .take_while(move |(_, tile)| matches!(tile[col], Tile::Togglable(_)))
-            .map(move |(i, _)| (i, col));
+            .skip(rows - row)
+            .map_while(move |(row, row_tiles)| togglable_pos(row, col, row_tiles));
 
         let below = self
             .grid
             .iter()
             .enumerate()
             .skip(row + 1)
-            .take_while(move |(_, tile)| matches!(tile[col], Tile::Togglable(_)))
-            .map(move |(i, _)| (i, col));
+            .map_while(move |(row, row_tiles)| togglable_pos(row, col, row_tiles));
 
         above.chain(below)
     }
 }
 
+fn togglable_pos2(row: usize, col: usize, tile: &Tile) -> Option<(usize, usize)> {
+    matches!(tile, Tile::Togglable(_)).then(|| (row, col))
+}
+
+fn togglable_pos(row: usize, col: usize, row_tiles: &[Tile]) -> Option<(usize, usize)> {
+    matches!(row_tiles.get(col), Some(Tile::Togglable(_))).then(|| (row, col))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_grid(tiles: Vec<Vec<Tile>>) -> Grid {
+        Grid {
+            grid: tiles,
+            solution: vec![],
+        }
+    }
 
     fn assert_grid(expected: &Grid, actual: &Grid) {
         let expected = &expected.grid;
@@ -160,32 +186,24 @@ mod tests {
         assert_eq!(expected.len(), actual.len(), "Rows mismatch");
         assert_eq!(expected[0].len(), actual[0].len(), "Columns mismatch");
 
-        for row in 0..expected.len() {
-            for col in 0..expected[0].len() {
-                assert_eq!(
-                    expected[row][col], actual[row][col],
-                    "Tile mismatch at [{row}][{col}]"
-                );
-            }
+        let expected = expected.iter().flatten();
+        let actual = actual.iter().flatten();
+        let pairs = expected.zip(actual).enumerate();
+
+        for (n, (expected_tile, actual_tile)) in pairs {
+            assert_eq!(expected_tile, actual_tile, "Tile mismatch at [{n}]");
         }
     }
 
     #[test]
     fn inserting_lightbulb_lights_neighbours_in_line() {
-        let mut grid = Grid {
-            size: Vec2::new(3, 3),
-            grid: vec![vec![Tile::blank(); 3]; 3],
-        };
+        let mut grid = test_grid(vec![vec![Tile::blank(); 3]; 3]);
 
-        let expected = Grid {
-            size: Vec2::new(3, 3),
-
-            grid: vec![
-                vec![Tile::blank(), Tile::lit_empty(1), Tile::blank()],
-                vec![Tile::lit_empty(1), Tile::bulb(1), Tile::lit_empty(1)],
-                vec![Tile::blank(), Tile::lit_empty(1), Tile::blank()],
-            ],
-        };
+        let expected = test_grid(vec![
+            vec![Tile::blank(), Tile::lit_empty(1), Tile::blank()],
+            vec![Tile::lit_empty(1), Tile::bulb(1), Tile::lit_empty(1)],
+            vec![Tile::blank(), Tile::lit_empty(1), Tile::blank()],
+        ]);
 
         grid.toggle(1, 1);
 
@@ -194,18 +212,12 @@ mod tests {
 
     #[test]
     fn lights_in_two_corners() {
-        let mut grid = Grid {
-            size: Vec2::new(3, 3),
-            grid: vec![vec![Tile::blank(); 3]; 3],
-        };
-        let expected = Grid {
-            size: Vec2::new(3, 3),
-            grid: vec![
-                vec![Tile::bulb(1), Tile::lit_empty(1), Tile::lit_empty(2)],
-                vec![Tile::lit_empty(1), Tile::blank(), Tile::lit_empty(1)],
-                vec![Tile::lit_empty(2), Tile::lit_empty(1), Tile::bulb(1)],
-            ],
-        };
+        let mut grid = test_grid(vec![vec![Tile::blank(); 3]; 3]);
+        let expected = test_grid(vec![
+            vec![Tile::bulb(1), Tile::lit_empty(1), Tile::lit_empty(2)],
+            vec![Tile::lit_empty(1), Tile::blank(), Tile::lit_empty(1)],
+            vec![Tile::lit_empty(2), Tile::lit_empty(1), Tile::bulb(1)],
+        ]);
 
         grid.toggle(0, 0);
         grid.toggle(2, 2);
@@ -215,24 +227,42 @@ mod tests {
 
     #[test]
     fn lights_shining_at_each_other_in_all_corners() {
-        let mut grid = Grid {
-            size: Vec2::new(4, 3),
-            grid: vec![vec![Tile::blank(); 3]; 4],
-        };
-        let expected = Grid {
-            size: Vec2::new(4, 3),
-            grid: vec![
-                vec![Tile::bulb(3), Tile::lit_empty(2), Tile::bulb(3)],
-                vec![Tile::lit_empty(2), Tile::lit_empty(0), Tile::lit_empty(2)],
-                vec![Tile::lit_empty(2), Tile::lit_empty(0), Tile::lit_empty(2)],
-                vec![Tile::bulb(3), Tile::lit_empty(2), Tile::bulb(3)],
-            ],
-        };
+        let mut grid = test_grid(vec![vec![Tile::blank(); 3]; 4]);
+        let expected = test_grid(vec![
+            vec![Tile::bulb(3), Tile::lit_empty(2), Tile::bulb(3)],
+            vec![Tile::lit_empty(2), Tile::lit_empty(0), Tile::lit_empty(2)],
+            vec![Tile::lit_empty(2), Tile::lit_empty(0), Tile::lit_empty(2)],
+            vec![Tile::bulb(3), Tile::lit_empty(2), Tile::bulb(3)],
+        ]);
 
         grid.toggle(0, 0);
         grid.toggle(0, 2);
         grid.toggle(3, 0);
         grid.toggle(3, 2);
+
+        assert_grid(&expected, &grid);
+    }
+
+    #[test]
+    fn light_is_blocked_by_walls_minimal() {
+        let mut grid = test_grid(vec![vec![
+            Tile::blank(),
+            Tile::wall(),
+            Tile::blank(),
+            Tile::blank(),
+            Tile::wall(),
+            Tile::blank(),
+        ]]);
+        let expected = test_grid(vec![vec![
+            Tile::blank(),
+            Tile::wall(),
+            Tile::bulb(1),
+            Tile::lit_empty(1),
+            Tile::wall(),
+            Tile::blank(),
+        ]]);
+
+        grid.toggle(0, 2);
 
         assert_grid(&expected, &grid);
     }
