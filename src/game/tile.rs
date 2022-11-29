@@ -20,6 +20,7 @@ impl Tile {
         })
     }
 
+    #[cfg(test)]
     pub const fn bulb(level: u8) -> Self {
         Self::Togglable(TogglableTile {
             light_level: level,
